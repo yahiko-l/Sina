@@ -90,7 +90,15 @@ def delete_all_total_data():
 
 
 def remove_irrelevant_file(new_type_dir):
-    irrelevant_filename = ['total_data.json', 'images', 'data_total_all.json', 'temp.json', 'data_total_all_userinfo.json']
+    irrelevant_filename = ['total_data.json',
+                           'data_total_all.json',
+                           'data_total_all_userinfo.json',
+                           'images',
+                           'temp.json',
+                           'total_data_backup.json',
+                           'data_total_all_backup.json',
+                           'data_total_all_userinfo_backup.json',
+                           ]
     for item in new_type_dir:
         if str(item) in irrelevant_filename:
             new_type_dir.remove(item)
@@ -108,6 +116,7 @@ def remove_irrelevant_file(new_type_dir):
 def main():
     """ comment_show = 0 时直接赋值为0即可， 依据，每日采集的数据有重复且会覆盖之前 comment_show 的值 """
     for new_type in os.listdir(main_path):
+        new = new_type
         new_type = os.path.join(main_path, new_type)
 
         new_type_dir = os.listdir(new_type)
@@ -125,7 +134,14 @@ def main():
 
         for date in new_type_dir:
             path = os.path.join(new_type, date)
-            filename = os.listdir(path)[0]
+
+            try:
+                filename = os.listdir(path)[0]
+            except:
+                # 有时候服务器由于某种原因（网络、机器问题）没有爬取当天的数据，导致数据合并时报错
+                print(f'{path} not exist!')
+                continue
+
             file_path = os.path.join(new_type, date, filename)
 
             with open(file_path, 'r', encoding='utf-8') as load_f:
@@ -133,22 +149,22 @@ def main():
                 for i in range(len(load_dict)):
 
                     # 将 title作为字典的key
-                    Title = load_dict[i]['title']
+                    docid = load_dict[i]['docid']
 
                     # 若每日采集的数据不存在 comment_show 字段， 则添加该字段
                     if not 'comment_show' in load_dict[i].keys():
                         load_dict[i]['comment_show'] = 0
 
                     # 若新闻不在total_data_dict中，则该新闻被新增加
-                    if Title  not in total_data_dict:
-                        print('update news ', Title)
-                        total_data_dict.update({Title: load_dict[i]})
+                    if docid  not in total_data_dict:
+                        print(f"{new} update news: {load_dict[i]['title']}")
+                        total_data_dict.update({docid: load_dict[i]})
 
                     else:
                         # 若该新闻存在，但total_data_dict 中 comment_show 的值 小于 load_dict 中 comment_show 的值，则更新
-                        if int(total_data_dict[Title]['comment_show']) < int(load_dict[i]['comment_show']):
-                            print(f"ori total_data_dict comment_show {total_data_dict[Title]['comment_show']} update to {load_dict[i]['comment_show']}")
-                            total_data_dict[Title]['comment_show'] = int(load_dict[i]['comment_show'])
+                        if int(total_data_dict[docid]['comment_show']) < int(load_dict[i]['comment_show']):
+                            print(f"{new} ori total_data_dict comment_show {total_data_dict[docid]['comment_show']} update to {load_dict[i]['comment_show']}")
+                            total_data_dict[docid]['comment_show'] = int(load_dict[i]['comment_show'])
 
         data_save(total_data_dict, new_type + '/total_data.json')
 

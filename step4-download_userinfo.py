@@ -120,26 +120,26 @@ def main():
     main_path = os.path.join(PATH, 'Sina')
 
     for new_type in os.listdir(main_path):
-        # if new_type == 'money':
 
-        new_type = os.path.join(main_path, new_type)
+        if new_type == 'sport':
 
-        data_total_all_path =  os.path.join(new_type, 'data_total_all.json')
-        data_total_all_userinfo_path =  os.path.join(new_type, 'data_total_all_userinfo.json')
+            new_type = os.path.join(main_path, new_type)
 
-        if  os.path.exists(data_total_all_path):
+            data_total_all_path =  os.path.join(new_type, 'data_total_all.json')
+            data_total_all_userinfo_path =  os.path.join(new_type, 'data_total_all_userinfo.json')
 
-            if not os.path.exists(data_total_all_userinfo_path):
-                # 若 data_total_all_userinfo.json 文件不存在时，读取数据源来自 data_total_all_path (data_total_all.json)
-                download(data_total_all_path, new_type, data_total_all_userinfo_path)
+            if  os.path.exists(data_total_all_path):
+
+                if not os.path.exists(data_total_all_userinfo_path):
+                    # 若 data_total_all_userinfo.json 文件不存在时，读取数据源来自 data_total_all_path (data_total_all.json)
+                    download(data_total_all_path, new_type, data_total_all_userinfo_path)
+                else:
+                    # 若 data_total_all_userinfo.json 存在，读取数据源来自 data_total_all_userinfo_path (data_total_all_userinfo.json)
+                    download(data_total_all_userinfo_path, new_type, data_total_all_userinfo_path)
+
             else:
-                # 若 data_total_all_userinfo.json 存在，读取数据源来自 data_total_all_userinfo_path (data_total_all_userinfo.json)
-                download(data_total_all_userinfo_path, new_type, data_total_all_userinfo_path)
+                print(f'{data_total_all_path} file is not exist!')
 
-        else:
-            print(f'{data_total_all_path} file is not exist!')
-
-        # break
 
 
 
