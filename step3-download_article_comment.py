@@ -7,6 +7,10 @@ import sys
 from tqdm import tqdm
 import time
 
+import datetime
+# 打印当前时间
+currt_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+print(currt_time)
 
 PATH = os.path.abspath(os.path.dirname(__file__))
 
@@ -145,21 +149,26 @@ def images_download(images_url, images_path):
 
 def comments_processing(ori_comments):
     ori_comments = ori_comments[20: -1]
-    ori_comments = json.loads(ori_comments)
 
     try:
-        newest_comments = ori_comments['result']['cmntlist']
+        ori_comments = json.loads(ori_comments)
+        try:
+            newest_comments = ori_comments['result']['cmntlist']
+        except:
+            newest_comments = []
+
+        try:
+            hottest_comments = ori_comments['result']['hot_list']
+        except:
+            hottest_comments = []
+
+        try:
+            sub_comments = ori_comments['result']['threaddict']
+        except:
+            sub_comments = {}
     except:
         newest_comments = []
-
-    try:
-        hottest_comments = ori_comments['result']['hot_list']
-    except:
         hottest_comments = []
-
-    try:
-        sub_comments = ori_comments['result']['threaddict']
-    except:
         sub_comments = {}
 
     return newest_comments, hottest_comments, sub_comments
@@ -248,7 +257,7 @@ def comment_download(value):
     return comments
 
 
-def frist_download(total_data_dict, data_total_all_path, images_path, new_type):
+def frist_download(total_data_dict, data_total_all_path, images_path, new_type, interval_saving):
     # 首次数据下载
     with tqdm(total_data_dict.items(), desc=new_type + ' First Download', file=sys.stdout, disable=False) as total_data_dict_iterator:
         for i, (key, value) in enumerate(total_data_dict_iterator):
@@ -277,19 +286,21 @@ def frist_download(total_data_dict, data_total_all_path, images_path, new_type):
             value.update({'comments': comments})
 
             # interval saving
-            if i !=0 and i%200 ==0:
-                print(f'interval saving {i}')
+            if i !=0 and i % interval_saving == 0:
                 data_save(total_data_dict, data_total_all_path)
+                print(f'First Download interval saving {i}')
 
         # last saving
         data_save(total_data_dict, data_total_all_path)
 
 
-def continue_download(data_total_all_dict, data_total_all_path, new_type, images_path):
+def continue_download(data_total_all_dict, data_total_all_path, new_type, images_path, interval_saving):
     with tqdm(data_total_all_dict.items(), desc=new_type + ' Continue Download', file=sys.stdout, disable=False) as total_data_dict_iterator:
         for i, (key, value) in enumerate(total_data_dict_iterator):
 
-            if i >= 200:
+            # 续点位置是根据当前终止的位置开始确定，跳跃之前下载的内容，直接下载执行的内容，
+            continue_position = 135000           # 需要手动设定，首次下载设置为0，后续根据断点位置确定值
+            if i >= continue_position:
                 # 1-download article
                 article_url = value['url']
                 article = article_download(article_url, new_type)
@@ -315,9 +326,9 @@ def continue_download(data_total_all_dict, data_total_all_path, new_type, images
                 value.update({'comments': comments})
 
                 # interval saving
-                if i !=0 and i%300 ==0:
-                    print(f'interval saving {i}')
+                if i != 0 and i % interval_saving == 0:
                     data_save(data_total_all_dict, data_total_all_path)
+                    print(f'Continue Download interval saving {i}')
 
         # last saving
         data_save(data_total_all_dict, data_total_all_path)
@@ -326,6 +337,7 @@ def continue_download(data_total_all_dict, data_total_all_path, new_type, images
 def update_dict_all(total_data_dict, data_total_all_dict, data_total_all_path, new_type, images_path):
     """
         新增文章和图片更新下载
+        在 total_data_dict 有新增的文章，data_total_all_dict 未包含新增的文章；需要更新data_total_all_dict原有的内容
     """
     with tqdm(total_data_dict.items(), desc=new_type + ' Article Download', file=sys.stdout, disable=False) as total_data_dict_iterator:
         for i, (key, value) in enumerate(total_data_dict_iterator):
@@ -359,16 +371,18 @@ def update_dict_all(total_data_dict, data_total_all_dict, data_total_all_path, n
 
                 data_total_all_dict.update({key: value})
 
-
+        # 覆盖保存 data_total_all.json ， 已下载更新的article文件
+        data_save(data_total_all_dict, data_total_all_path)
     """
-        更新请求下载,
+        更新下载,
+        1.当文章为空时，则需要再次请求下载；
+        2.当一篇文章对应的评论数量低于某个阈值时，需要再次请求更新评论。
     """
     with tqdm(data_total_all_dict.items(), desc=new_type + ' Comment Update Download', file=sys.stdout, disable=False) as data_total_all_dict_iterator:
         for i, (key, value) in enumerate(data_total_all_dict_iterator):
             comment_len = len(value['comments']['newest_comments'])
 
             # 若文章和图片内容为空，则再次请求，防止首次请求因网络失败导致无法获取内容
-            # ...
             article = value['article']
             if len(article) == 0:
                 # 1-download article
@@ -385,7 +399,7 @@ def update_dict_all(total_data_dict, data_total_all_dict, data_total_all_path, n
                 value.update({'images_filename': images_filename})
 
             # 3-update comment,当评论数量小于10重新请求
-            if comment_len < 20:
+            if comment_len == 0:
                 comments = comment_download(value)
                 value['comments'] = comments
 
@@ -393,16 +407,16 @@ def update_dict_all(total_data_dict, data_total_all_dict, data_total_all_path, n
         data_save(data_total_all_dict, data_total_all_path)
 
 
-def download(total_data_dict, data_total_all_path, images_path, new_type, is_continue_download=False):
+def download(total_data_dict, data_total_all_path, images_path, new_type, is_continue_download=False, interval_saving=5000):
     if not os.path.exists(data_total_all_path):
         # 首次执行文章和评论下载
-        frist_download(total_data_dict, data_total_all_path, images_path, new_type)
+        frist_download(total_data_dict, data_total_all_path, images_path, new_type, interval_saving)
     else:
         data_total_all_dict = data_read(data_total_all_path)
 
         if is_continue_download:
             # 由于执行中断等原因，导致下载程序终止，需要续点下载
-            continue_download(data_total_all_dict, data_total_all_path, new_type, images_path)
+            continue_download(data_total_all_dict, data_total_all_path, new_type, images_path, interval_saving)
 
         else:
             """
@@ -417,24 +431,28 @@ def download(total_data_dict, data_total_all_path, images_path, new_type, is_con
 
 
 def main():
-    is_continue_download = True
+    is_continue_download = False
+    interval_saving = 0
     print(f"is_continue_download {is_continue_download}")
 
     main_path = os.path.join(PATH, 'Sina')
-    for new_type in os.listdir(main_path):
 
-        if new_type == 'tech':
-            new_type_path = os.path.join(main_path, new_type)
+    categories = os.listdir(main_path)
+    print(categories)
 
-            total_data_path = os.path.join(new_type_path, 'total_data.json')
-            data_total_all_path =  os.path.join(new_type_path, 'data_total_all.json')
+    for new_type in categories:
 
-            images_path =  os.path.join(new_type_path, 'images')
-            if not os.path.exists(images_path):
-                os.mkdir(images_path)
+        new_type_path = os.path.join(main_path, new_type)
 
-            total_data_dict = data_read(total_data_path)
-            download(total_data_dict, data_total_all_path, images_path, new_type, is_continue_download)
+        total_data_path = os.path.join(new_type_path, 'total_data.json')
+        data_total_all_path =  os.path.join(new_type_path, 'data_total_all.json')
+
+        images_path =  os.path.join(new_type_path, 'images')
+        if not os.path.exists(images_path):
+            os.mkdir(images_path)
+
+        total_data_dict = data_read(total_data_path)
+        download(total_data_dict, data_total_all_path, images_path, new_type, is_continue_download, interval_saving)
 
 
 if __name__ == '__main__':
